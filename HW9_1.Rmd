@@ -1,0 +1,76 @@
+---
+title: "Homework #9: Stacking" 
+author: "**Theo Thormann**"
+date: "Due: Wed Nov 16 | 11:45am"
+output: R6030::homework
+---
+
+**DS 6030 \| Fall 2022 \| University of Virginia**
+
+------------------------------------------------------------------------
+
+```{r config, echo=FALSE}
+source(system.file("config/hw_config.R", package="R6030")) # knitr settings
+options(dplyr.summarise.inform = FALSE)  # ignore dplyr message about grouping
+library(tidyverse)
+library(xgboost)
+```
+
+# Problem 1: Kaggle
+
+You are to make at least one official entry in the [House Prices: Advanced Regression Techniques](https://www.kaggle.com/c/house-prices-advanced-regression-techniques/overview) Kaggle contest.
+
+-   You will need to register in Kaggle (its free)
+-   Read the details of the contest. Understand the data and evaluation function.
+-   Make at least one submission
+-   If you get a score on the public leaderboard of $\text{RMSE}<0.50$ (note RMSE is calculated on the log scale), you receive full credit, otherwise, you'll lose 10 points.
+    -   I'll allow [teaming](https://www.kaggle.com/c/house-prices-advanced-regression-techniques/team) to achieve the score, but only if everyone on the team produces a model that is used to generate the final submission (e.g., stacking or model averaging)
+-   Submit the following in Collab:
+    -   Code
+    -   kaggle name (or team name) so we can ensure you had a valid submission.
+    -   your score and current ranking on the kaggle leaderboard
+-   Top 5 scores get 2 bonus points
+    -   Teams will split their bonus points among team members
+    
+```{r}
+sample <- read.csv('sample_submission.csv')
+test <- read.csv('test.csv')
+train <- read.csv('train.csv')
+```
+
+```{r}
+#Remove all the categorical variables since XGBoost cannot run with these variables
+train <- train[, !sapply(train, is.character)]
+test <- test[, !sapply(test, is.character)]
+```
+
+```{r}
+test[is.na(test)] <- 0
+train[is.na(train)] <- 0
+```
+```{r}
+#checked several different parameters othe rthan default. Found that dart is the best booster, eta is better at 0.1 and subsample is better at 0.7
+params <- list(booster = 'dart', eval_metric = 'rmsle', objective = "reg:squarederror", eta=0.1, subsample = 0.7)
+```
+```{r}
+#test to see what to set nrounds parameter to
+set.seed(100)
+cross_val <- xgb.cv( params = params, data = data.matrix(train %>% select(-SalePrice)), label = train$SalePrice, nrounds = 200, nfold = 10, showsd = T, stratified = T, print.every.n = 10, early.stop.round = 20, maximize = F)
+```
+
+
+
+```{r}
+model <- xgboost(data = data.matrix(train %>% select(-SalePrice)), label = train$SalePrice, max.depth = 5, eta = 0.1, nthread = 2, nrounds = 96, objective = "reg:squarederror", eval_metric = 'rmsle', booster = 'dart', subsample = 0.7,verbose = 0)
+```
+    
+```{r}
+y_hat = predict(model, newdata = data.matrix(test))
+```
+```{r}
+submission = tibble(Id = test$Id, SalePrice = y_hat)
+```
+```{r}
+write.csv(submission, "/Users/theothormann/Desktop/Data Science/Fall/DS6030/Homework/HW9/thormann_submission_5.csv", row.names = FALSE)
+```
+
